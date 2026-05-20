@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>منصة التحاضير اليومية لطلبة الثناء</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; color: #333; }
@@ -60,4 +62,182 @@
             <input type="file" id="lesson-file" accept="image/*">
         </div>
         <div class="form-group">
-            <label>اختر الصف والشعبة:</
+            <label>اختر الصف والشعبة:</label>
+            <select id="lesson-class">
+                <option value="a">السادس (أ)</option>
+                <option value="b">السادس (ب)</option>
+            </select>
+        </div>
+        <button class="submit-btn" id="upload-btn" onclick="publishLesson()">نشر التحضير الآن أونلاين ✨</button>
+        <button onclick="logoutAdmin()" style="margin-top:15px; background:#95a5a6; color:white; border:none; width:100%; padding:5px; border-radius:5px; cursor:pointer;">خروج</button>
+    </div>
+
+    <div class="tab-container">
+        <button id="btn-a" class="tab-btn active" onclick="switchTab('a')">السادس (أ)</button>
+        <button id="btn-b" class="tab-btn" onclick="switchTab('b')">السادس (ب)</button>
+    </div>
+
+    <div id="area-a" class="content-section active"></div>
+    <div id="area-b" class="content-section"></div>
+
+    <script>
+        const ADMIN_PASSWORD = "10102020";
+        let isAdminActive = false;
+
+        // إعدادات السيرفر السريع المفتوح أونلاين للكل جاهزة ومفعلة 100%
+        const SUPABASE_URL = "https://wkgtbwxlwshunwexwzyp.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndrZ3Rid3hsd3NodW53ZXh3enlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTYyMzE0MDksImV4cCI6MjAzMTgwNzQwOX0.7l-b5-rI8fHn6Jt3XJbH8tD_9Z-bH-eF1jX7bH_9Z-b";
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        function loginAdmin() {
+            let password = prompt("الرجاء إدخال كلمة سر الأدمن:");
+            if (password === ADMIN_PASSWORD) {
+                isAdminActive = true;
+                document.getElementById('admin-panel').style.display = 'block';
+                document.getElementById('login-toggle-btn').style.display = 'none';
+                renderLessonsUI(); 
+            } else { alert("خطأ!"); }
+        }
+
+        function logoutAdmin() {
+            isAdminActive = false;
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('login-toggle-btn').style.display = 'block';
+            renderLessonsUI(); 
+        }
+
+        async function publishLesson() {
+            let title = document.getElementById('lesson-title').value;
+            let fileInput = document.getElementById('lesson-file');
+            let targetClass = document.getElementById('lesson-class').value;
+            let submitBtn = document.getElementById('upload-btn');
+
+            if (title === "" || fileInput.files.length === 0) {
+                alert("الرجاء ملء البيانات واختيار صورة!");
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = "جاري النشر السريع أونلاين... ⏳";
+
+            let file = fileInput.files[0];
+            let fileName = Date.now() + "_" + file.name;
+
+            try {
+                // 1. رفع الصورة مباشرة إلى السيرفر المشترك أونلاين بدون قيود
+                let { data: uploadData, error: uploadError } = await _supabase.storage
+                    .from('lessons_images')
+                    .upload(fileName, file);
+
+                if (uploadError) throw uploadError;
+
+                // جلب رابط الصورة العام للكل
+                let { data: urlData } = _supabase.storage
+                    .from('lessons_images')
+                    .getPublicUrl(fileName);
+
+                let imageUrl = urlData.publicUrl;
+
+                // 2. حفظ بيانات التحضير في قاعدة البيانات أونلاين
+                let { error: dbError } = await _supabase
+                    .from('lessons')
+                    .insert([{ title: title, img: imageUrl, class: targetClass, created_at: new Date() }]);
+
+                if (dbError) throw dbError;
+
+                alert("تم النشر أونلاين لجميع الهواتف بنجاح! 🎉");
+                document.getElementById('lesson-title').value = "";
+                fileInput.value = "";
+                loadLessons();
+            } catch (error) {
+                alert("حدث خطأ أثناء النشر، تأكد من الاتصال بالشبكة.");
+                console.error(error);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "نشر التحضير الآن ✨";
+            }
+        }
+
+        async function loadLessons() {
+            try {
+                let { data, error } = await _supabase
+                    .from('lessons')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                window.globalLessons = data || [];
+                renderLessonsUI();
+            } catch (e) {
+                console.error("خطأ في جلب البيانات:", e);
+            }
+        }
+
+        async function deleteLesson(id) {
+            if (confirm("حذف التحضير نهائياً من أجهزة الكل؟")) {
+                let { error } = await _supabase
+                    .from('lessons')
+                    .delete()
+                    .eq('id', id);
+
+                if (!error) loadLessons();
+                else alert("عذراً، فشل الحذف أونلاين.");
+            }
+        }
+
+        function formatUploadTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            let hours = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'مساءً' : 'صباحاً';
+            hours = hours % 12 || 12;
+            const timeString = `${hours}:${minutes} ${ampm}`;
+            if (date.toDateString() === now.toDateString()) return `📅 نُشر اليوم في الـ ${timeString}`;
+            return `📅 نُشر بتاريخ: ${date.getDate()}/${date.getMonth() + 1} في الـ ${timeString}`;
+        }
+
+        function renderLessonsUI() {
+            let areaA = document.getElementById('area-a');
+            let areaB = document.getElementById('area-b');
+            areaA.innerHTML = ""; areaB.innerHTML = "";
+            let countA = 0; let countB = 0;
+            let deleteStyle = isAdminActive ? "style='display: block;'" : "";
+            let list = window.globalLessons || [];
+
+            list.forEach(lesson => {
+                let card = `
+                    <div class="lesson-card">
+                        <button class="delete-btn" ${deleteStyle} onclick="deleteLesson('${lesson.id}')">حذف 🗑️</button>
+                        <h3>${lesson.title}</h3>
+                        <div class="time-bar">${formatUploadTime(lesson.created_at)}</div>
+                        <br>
+                        <img src="${lesson.img}" loading="lazy">
+                        <br>
+                        <a href="${lesson.img}" target="_blank" class="download-btn">عرض وتحميل التحضير 📥</a>
+                    </div>
+                `;
+                if (lesson.class === 'a') { areaA.innerHTML += card; countA++; }
+                else { areaB.innerHTML += card; countB++; }
+            });
+
+            if(countA === 0) areaA.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (أ) حالياً.</p>";
+            if(countB === 0) areaB.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (ب) حالياً.</p>";
+        }
+
+        function switchTab(classType) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            if (classType === 'a') {
+                document.getElementById('area-a').classList.add('active');
+                document.getElementById('btn-a').classList.add('active');
+            } else {
+                document.getElementById('area-b').classList.add('active');
+                document.getElementById('btn-b').classList.add('active');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadLessons);
+    </script>
+</body>
+</html>
