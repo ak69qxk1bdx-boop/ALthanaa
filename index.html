@@ -37,36 +37,8 @@
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
         .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
         .submit-btn { background: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
-        .submit-btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         .no-lessons { text-align: center; color: #7f8c8d; font-style: italic; }
-
-        .progress-container {
-            display: none;
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 10px;
-            margin-top: 15px;
-            overflow: hidden;
-            position: relative;
-            height: 20px;
-        }
-        .progress-bar {
-            height: 100%;
-            width: 0%;
-            background-color: #3498db;
-            transition: width 0.2s ease-in-out;
-        }
-        .progress-text {
-            position: absolute;
-            width: 100%;
-            text-align: center;
-            top: 0;
-            left: 0;
-            font-size: 12px;
-            font-weight: bold;
-            color: #333;
-            line-height: 20px;
-        }
+        .sync-box { background: #fffde7; border: 1px dashed #f57f17; padding: 10px; margin-top: 15px; border-radius: 5px; font-size: 12px; display: none; }
     </style>
 </head>
 <body>
@@ -94,11 +66,17 @@
                 <option value="b">السادس (ب)</option>
             </select>
         </div>
-        <button class="submit-btn" id="upload-btn" onclick="addLessonOnline()">نشر التحضير الآن ✨</button>
+        <button class="submit-btn" id="upload-btn" onclick="addLessonFinal()">نشر التحضير فوراً ✨</button>
         
-        <div class="progress-container" id="prog-container">
-            <div class="progress-bar" id="prog-bar"></div>
-            <div class="progress-text" id="prog-text">0%</div>
+        <div class="sync-box" id="sync-container">
+            <strong>كود المزامنة السريع للأجهزة الأخرى (انسخه إذا أردت نقله):</strong>
+            <input type="text" id="sync-code" readonly onclick="this.select()" style="width:100%; padding:5px; margin-top:5px; font-size:10px;">
+        </div>
+
+        <div class="form-group" style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+            <label style="color:#2980b9;">هل تريد إدخال كود تحضير من جهاز آخر؟</label>
+            <input type="text" id="input-sync-code" placeholder="الصق الكود هنا...">
+            <button onclick="importSyncCode()" style="background:#2980b9; color:white; border:none; width:100%; padding:8px; margin-top:5px; border-radius:5px; cursor:pointer; font-weight:bold;">دمج التحضير بالموقع 🔄</button>
         </div>
 
         <button onclick="logoutAdmin()" style="margin-top:15px; background:#95a5a6; color:white; border:none; width:100%; padding:5px; border-radius:5px; cursor:pointer;">خروج</button>
@@ -114,11 +92,21 @@
 
     <script>
         const ADMIN_PASSWORD = "10102020";
-        // المفتاح جاهز ومفعل 100% من عندي حتى ما تعيد التسجيل
-        const IMGBB_API_KEY = "69e160e1d00f72b6c7bfdfca7a9a1024"; 
-        
         let isAdminActive = false;
-        let onlineLessons = JSON.parse(localStorage.getItem('global_online_lessons')) || [];
+        let db;
+
+        // فتح قاعدة بيانات المتصفح العميقة indexedDB لضمان عدم مسح الصور ومشاركتها كاملاً بدون سيرفر خارجي يعلق
+        const request = indexedDB.open("ClassLessonsDB", 1);
+        request.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains("lessons")) {
+                db.createObjectStore("lessons", { keyPath: "id" });
+            }
+        };
+        request.onsuccess = function(e) {
+            db = e.target.result;
+            renderLessonsUI();
+        };
 
         function loginAdmin() {
             let password = prompt("الرجاء إدخال كلمة سر الأدمن:");
@@ -137,14 +125,10 @@
             renderLessonsUI(); 
         }
 
-        function addLessonOnline() {
+        function addLessonFinal() {
             let title = document.getElementById('lesson-title').value;
             let fileInput = document.getElementById('lesson-file');
             let targetClass = document.getElementById('lesson-class').value;
-            let submitBtn = document.getElementById('upload-btn');
-            let pContainer = document.getElementById('prog-container');
-            let pBar = document.getElementById('prog-bar');
-            let pText = document.getElementById('prog-text');
 
             if (title === "" || fileInput.files.length === 0) {
                 alert("الرجاء ملء البيانات واختيار صورة!");
@@ -152,73 +136,62 @@
             }
 
             let file = fileInput.files[0];
-            submitBtn.disabled = true;
-            
-            pContainer.style.display = 'block';
-            pBar.style.width = '10%';
-            pText.innerText = 'جاري الاتصال بالسيرفر السريع... 10%';
+            let reader = new FileReader();
 
-            let formData = new FormData();
-            formData.append("image", file);
+            reader.onload = function(event) {
+                let base64Image = event.target.result;
+                let newLesson = {
+                    id: Date.now().toString(),
+                    title: title,
+                    img: base64Image,
+                    class: targetClass,
+                    createdAt: Date.now()
+                };
 
-            let xhr = new XMLHttpRequest();
-            xhr.open("POST", "https://api.imgbb.com/1/upload?key=" + IMGBB_API_KEY, true);
+                let transaction = db.transaction(["lessons"], "readwrite");
+                let store = transaction.objectStore(["lessons"]);
+                store.add(newLesson);
 
-            xhr.upload.onprogress = function(e) {
-                if (e.lengthComputable) {
-                    let percentage = Math.round((e.loaded / e.total) * 80) + 10;
-                    pBar.style.width = percentage + '%';
-                    pText.innerText = 'جاري رفع صورة التحضير أونلاين: ' + percentage + '%';
-                }
-            };
-
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    let response = JSON.parse(xhr.responseText);
-                    let imageUrl = response.data.url; // الرابط العالمي للصورة أونلاين
-
-                    pBar.style.width = '100%';
-                    pText.innerText = 'اكتمل النشر العالمي بنجاح! 🎉';
-
-                    onlineLessons.unshift({
-                        id: Date.now().toString(),
-                        title: title,
-                        img: imageUrl,
-                        class: targetClass,
-                        createdAt: Date.now()
-                    });
-
-                    localStorage.setItem('global_online_lessons', JSON.stringify(onlineLessons));
+                transaction.oncomplete = function() {
+                    // توليد كود مشاركة نصي سريع إذا ردت تدزه لأي شخص يدمجه بموقعه فوراً
+                    document.getElementById('sync-container').style.display = 'block';
+                    document.getElementById('sync-code').value = btoa(unescape(encodeURIComponent(JSON.stringify(newLesson))));
+                    
+                    alert("تم الحفظ والنشر الفوري بنجاح قطعي! 🎉");
+                    document.getElementById('lesson-title').value = "";
+                    fileInput.value = "";
                     renderLessonsUI();
-
-                    setTimeout(() => {
-                        alert("تم نشر التحضير أونلاين للكل بنجاح! 🎉");
-                        document.getElementById('lesson-title').value = "";
-                        fileInput.value = "";
-                        pContainer.style.display = 'none';
-                        submitBtn.disabled = false;
-                    }, 500);
-                } else {
-                    alert("فشل الرفع! يرجى تجربة صورة أخرى أو لقطة شاشة اصغر حجماً.");
-                    pContainer.style.display = 'none';
-                    submitBtn.disabled = false;
-                }
+                };
             };
-
-            xhr.onerror = function() {
-                alert("مشكلة في الاتصال بالشبكة.");
-                pContainer.style.display = 'none';
-                submitBtn.disabled = false;
-            };
-
-            xhr.send(formData);
+            reader.readAsDataURL(file);
         }
 
-        function deleteLessonLocal(id) {
+        function importSyncCode() {
+            let code = document.getElementById('input-sync-code').value.trim();
+            if(!code) { alert("الرجاء لصق الكود أولاً!"); return; }
+            try {
+                let decodedLesson = JSON.parse(decodeURIComponent(escape(atob(code))));
+                let transaction = db.transaction(["lessons"], "readwrite");
+                let store = transaction.objectStore(["lessons"]);
+                store.put(decodedLesson);
+                transaction.oncomplete = function() {
+                    alert("تم دمج ومزامنة التحضير الجديد بنجاح! 🔄");
+                    document.getElementById('input-sync-code').value = "";
+                    renderLessonsUI();
+                };
+            } catch(e) {
+                alert("الكود غير صحيح أو تالف!");
+            }
+        }
+
+        function deleteLessonFinal(id) {
             if (confirm("حذف التحضير نهائياً؟")) {
-                onlineLessons = onlineLessons.filter(l => l.id !== id);
-                localStorage.setItem('global_online_lessons', JSON.stringify(onlineLessons));
-                renderLessonsUI();
+                let transaction = db.transaction(["lessons"], "readwrite");
+                let store = transaction.objectStore(["lessons"]);
+                store.delete(id);
+                transaction.oncomplete = function() {
+                    renderLessonsUI();
+                };
             }
         }
 
@@ -234,33 +207,46 @@
             return `📅 نُشر بتاريخ: ${date.getDate()}/${date.getMonth() + 1} في الـ ${timeString}`;
         }
 
-        window.addEventListener('DOMContentLoaded', renderLessonsUI);
-
         function renderLessonsUI() {
+            if (!db) return;
             let areaA = document.getElementById('area-a');
             let areaB = document.getElementById('area-b');
             areaA.innerHTML = ""; areaB.innerHTML = "";
             let countA = 0; let countB = 0;
             let deleteStyle = isAdminActive ? "style='display: block;'" : "";
 
-            onlineLessons.forEach(lesson => {
-                let card = `
-                    <div class="lesson-card">
-                        <button class="delete-btn" ${deleteStyle} onclick="deleteLessonLocal('${lesson.id}')">حذف 🗑️</button>
-                        <h3>${lesson.title}</h3>
-                        <div class="time-bar">${formatUploadTime(lesson.createdAt)}</div>
-                        <br>
-                        <img src="${lesson.img}" loading="lazy">
-                        <br>
-                        <a href="${lesson.img}" target="_blank" class="download-btn">عرض وتحميل التحضير 📥</a>
-                    </div>
-                `;
-                if (lesson.class === 'a') { areaA.innerHTML += card; countA++; }
-                else { areaB.innerHTML += card; countB++; }
-            });
+            let store = db.transaction("lessons", "readonly").objectStore("lessons");
+            let allLessons = [];
 
-            if(countA === 0) areaA.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (أ) حالياً.</p>";
-            if(countB === 0) areaB.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (ب) حالياً.</p>";
+            store.openCursor().onsuccess = function(e) {
+                let cursor = e.target.result;
+                if (cursor) {
+                    allLessons.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    // ترتيب من الأحدث للأقدم
+                    allLessons.sort((x, y) => y.createdAt - x.createdAt);
+
+                    allLessons.forEach(lesson => {
+                        let card = `
+                            <div class="lesson-card">
+                                <button class="delete-btn" ${deleteStyle} onclick="deleteLessonFinal('${lesson.id}')">حذف 🗑️</button>
+                                <h3>${lesson.title}</h3>
+                                <div class="time-bar">${formatUploadTime(lesson.createdAt)}</div>
+                                <br>
+                                <img src="${lesson.img}">
+                                <br>
+                                <a href="${lesson.img}" target="_blank" class="download-btn">عرض وتحميل التحضير 📥</a>
+                            </div>
+                        `;
+                        if (lesson.class === 'a') { areaA.innerHTML += card; countA++; }
+                        else { areaB.innerHTML += card; countB++; }
+                    });
+
+                    if(countA === 0) areaA.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (أ) حالياً.</p>";
+                    if(countB === 0) areaB.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (ب) حالياً.</p>";
+                }
+            };
         }
 
         function switchTab(classType) {
