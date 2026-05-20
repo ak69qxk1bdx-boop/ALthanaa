@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة التحاضير اليومية لطلبة الثناء</title>
+
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; margin: 0; padding: 0; color: #333; }
+        header { background-color: #2c3e50; color: white; text-align: center; padding: 25px 10px; position: relative; }
+        .admin-login-btn { position: absolute; top: 25px; left: 20px; background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .tab-container { display: flex; justify-content: center; margin: 20px auto; max-width: 500px; background: #ddd; border-radius: 25px; padding: 5px; gap: 5px; }
+        .tab-btn { flex: 1; padding: 12px; border: none; background: transparent; font-size: 15px; font-weight: bold; cursor: pointer; border-radius: 20px; white-space: nowrap; }
+        .tab-btn.active { background-color: #1abc9c; color: white; }
+        .content-section { display: none; max-width: 800px; margin: 20px auto; padding: 15px; }
+        .content-section.active { display: block; }
+        .lesson-card { background: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); margin-bottom: 25px; padding: 15px; text-align: center; position: relative; }
+        .lesson-card img { max-width: 100%; height: auto; border-radius: 5px; margin: 15px 0 10px 0; border: 1px solid #ddd; display: block; margin-left: auto; margin-right: auto; }
+        
+        .time-bar { 
+            background-color: #e8f4f8; 
+            color: #2980b9; 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 13px; 
+            font-weight: bold; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 5px;
+            margin-bottom: 12px;
+        }
+
+        .download-btn { display: inline-block; background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        .delete-btn { display: none; position: absolute; top: 15px; right: 15px; background-color: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        #admin-panel { display: none; background: #fff; max-width: 500px; margin: 20px auto; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); border-top: 5px solid #e74c3c; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .submit-btn { background: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
+        .submit-btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        .no-lessons { text-align: center; color: #7f8c8d; font-style: italic; }
+
+        .progress-container {
+            display: none;
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin-top: 15px;
+            overflow: hidden;
+            position: relative;
+            height: 20px;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #3498db;
+            transition: width 0.1s ease-in-out;
+        }
+        .progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 0;
+            left: 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            line-height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <button class="admin-login-btn" id="login-toggle-btn" onclick="loginAdmin()">دخول الأدمن 🔐</button>
+        <h1>منصة التحاضير اليومية لطلبة الثناء</h1>
+        <p>الصفوف الذهبية للسادس علمي</p>
+    </header>
+
+    <div id="admin-panel">
+        <h2 style="color: #e74c3c; text-align: center;">لوحة تحكم الأستاذ 🛠️</h2>
+        <div class="form-group">
+            <label>عنوان التحضير:</label>
+            <input type="text" id="lesson-title" placeholder="اكتب العنوان هنا...">
+        </div>
+        <div class="form-group">
+            <label>اختر صورة التحضير: 📁</label>
+            <input type="file" id="lesson-file" accept="image/*">
+        </div>
+        <div class="form-group">
+            <label>اختر الصف والشعبة:</label>
+            <select id="lesson-class">
+                <option value="a">السادس (أ)</option>
+                <option value="b">السادس (ب)</option>
+            </select>
+        </div>
+        <button class="submit-btn" id="upload-btn" onclick="addLessonDirect()">نشر التحضير الآن ✨</button>
+        
+        <div class="progress-container" id="prog-container">
+            <div class="progress-bar" id="prog-bar"></div>
+            <div class="progress-text" id="prog-text">0%</div>
+        </div>
+
+        <button onclick="logoutAdmin()" style="margin-top:15px; background:#95a5a6; color:white; border:none; width:100%; padding:5px; border-radius:5px; cursor:pointer;">خروج</button>
+    </div>
+
+    <div class="tab-container">
+        <button id="btn-a" class="tab-btn active" onclick="switchTab('a')">السادس (أ)</button>
+        <button id="btn-b" class="tab-btn" onclick="switchTab('b')">السادس (ب)</button>
+    </div>
+
+    <div id="area-a" class="content-section active"></div>
+    <div id="area-b" class="content-section"></div>
+
+    <script>
+        // الرمز السري الجديد مالتك
+        const ADMIN_PASSWORD = "10102020";
+        let isAdminActive = false;
+        let localLessons = JSON.parse(localStorage.getItem('direct_lessons')) || [];
+
+        function loginAdmin() {
+            let password = prompt("الرجاء إدخال كلمة سر الأدمن الجديدة:");
+            if (password === ADMIN_PASSWORD) {
+                isAdminActive = true;
+                document.getElementById('admin-panel').style.display = 'block';
+                document.getElementById('login-toggle-btn').style.display = 'none';
+                renderLessonsUI(); 
+            } else { alert("خطأ في كلمة السر!"); }
+        }
+
+        function logoutAdmin() {
+            isAdminActive = false;
+            document.getElementById('admin-panel').style.display = 'none';
+            document.getElementById('login-toggle-btn').style.display = 'block';
+            renderLessonsUI(); 
+        }
+
+        function addLessonDirect() {
+            let title = document.getElementById('lesson-title').value;
+            let fileInput = document.getElementById('lesson-file');
+            let targetClass = document.getElementById('lesson-class').value;
+            let submitBtn = document.getElementById('upload-btn');
+            let pContainer = document.getElementById('prog-container');
+            let pBar = document.getElementById('prog-bar');
+            let pText = document.getElementById('prog-text');
+
+            if (title === "" || fileInput.files.length === 0) {
+                alert("الرجاء ملء البيانات واختيار صورة!");
+                return;
+            }
+
+            let file = fileInput.files[0];
+            submitBtn.disabled = true;
+            pContainer.style.display = 'block';
+
+            let reader = new FileReader();
+
+            reader.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    let percentage = Math.round((e.loaded / e.total) * 100);
+                    pBar.style.width = percentage + '%';
+                    pText.innerText = 'جاري حفظ الصورة بالتلفون: ' + percentage + '%';
+                }
+            };
+
+            reader.onload = function(event) {
+                let base64Image = event.target.result;
+
+                pBar.style.width = '100%';
+                pText.innerText = 'اكتمل الحفظ بنجاح! 🎉';
+
+                localLessons.unshift({
+                    id: Date.now().toString(),
+                    title: title,
+                    img: base64Image,
+                    class: targetClass,
+                    createdAt: Date.now()
+                });
+
+                localStorage.setItem('direct_lessons', JSON.stringify(localLessons));
+                renderLessonsUI();
+
+                setTimeout(() => {
+                    alert("تم نشر التحضير من التلفون فوراً! 🎉");
+                    document.getElementById('lesson-title').value = "";
+                    fileInput.value = "";
+                    pContainer.style.display = 'none';
+                    submitBtn.disabled = false;
+                }, 300);
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // دالة الحذف الفوري من لوحة التحكم للأستاذ
+        function deleteLessonLocal(id) {
+            if (confirm("هل أنت متأكد من حذف هذا التحضير نهائياً؟")) {
+                localLessons = localLessons.filter(l => l.id !== id);
+                localStorage.setItem('direct_lessons', JSON.stringify(localLessons));
+                renderLessonsUI();
+            }
+        }
+
+        function formatUploadTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            let hours = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const ampm = hours >= 12 ? 'مساءً' : 'صباحاً';
+            hours = hours % 12 || 12;
+            const timeString = `${hours}:${minutes} ${ampm}`;
+            if (date.toDateString() === now.toDateString()) return `📅 نُشر اليوم في الـ ${timeString}`;
+            return `📅 نُشر بتاريخ: ${date.getDate()}/${date.getMonth() + 1} في الـ ${timeString}`;
+        }
+
+        window.addEventListener('DOMContentLoaded', renderLessonsUI);
+
+        function renderLessonsUI() {
+            let areaA = document.getElementById('area-a');
+            let areaB = document.getElementById('area-b');
+            areaA.innerHTML = ""; areaB.innerHTML = "";
+            let countA = 0; let countB = 0;
+            
+            // إظهار زر الحذف فقط إذا كان الأستاذ مسجل دخول
+            let deleteStyle = isAdminActive ? "style='display: block;'" : "";
+
+            localLessons.forEach(lesson => {
+                let card = `
+                    <div class="lesson-card">
+                        <button class="delete-btn" ${deleteStyle} onclick="deleteLessonLocal('${lesson.id}')">حذف 🗑️</button>
+                        <h3>${lesson.title}</h3>
+                        <div class="time-bar">${formatUploadTime(lesson.createdAt)}</div>
+                        <br>
+                        <img src="${lesson.img}" loading="lazy">
+                        <br>
+                        <a href="${lesson.img}" target="_blank" class="download-btn">عرض وتحميل التحضير 📥</a>
+                    </div>
+                `;
+                if (lesson.class === 'a') { areaA.innerHTML += card; countA++; }
+                else { areaB.innerHTML += card; countB++; }
+            });
+
+            if(countA === 0) areaA.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (أ) حالياً.</p>";
+            if(countB === 0) areaB.innerHTML = "<p class='no-lessons'>لا توجد تحاضير مرفوعة للسادس (ب) حالياً.</p>";
+        }
+
+        function switchTab(classType) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            if (classType === 'a') {
+                document.getElementById('area-a').classList.add('active');
+                document.getElementById('btn-a').classList.add('active');
+            } else {
+                document.getElementById('area-b').classList.add('active');
+                document.getElementById('btn-b').classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>
