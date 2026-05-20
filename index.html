@@ -130,7 +130,7 @@
                 localStorage.setItem('final_clean_lessons', JSON.stringify(lessons));
                 renderLessonsUI();
 
-                alert("تم النشر بنجاح قطعي! 🎉");
+                alert("تم النشر بنجاح! 🎉");
                 document.getElementById('lesson-title').value = "";
                 fileInput.value = "";
                 submitBtn.disabled = false;
@@ -193,13 +193,4 @@
             document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             if (classType === 'a') {
-                document.getElementById('area-a').classList.add('active');
-                document.getElementById('btn-a').classList.add('active');
-            } else {
-                document.getElementById('area-b').classList.add('active');
-                document.getElementById('btn-b').classList.add('active');
-            }
-        }
-    </script>
-</body>
-</html>
+                document.getElementById('area-
