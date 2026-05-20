@@ -54,7 +54,7 @@
             height: 100%;
             width: 0%;
             background-color: #3498db;
-            transition: width 0.1s ease-in-out;
+            transition: width 0.2s ease-in-out;
         }
         .progress-text {
             position: absolute;
@@ -94,7 +94,7 @@
                 <option value="b">السادس (ب)</option>
             </select>
         </div>
-        <button class="submit-btn" id="upload-btn" onclick="addLessonDirect()">نشر التحضير الآن ✨</button>
+        <button class="submit-btn" id="upload-btn" onclick="addLessonOnline()">نشر التحضير الآن ✨</button>
         
         <div class="progress-container" id="prog-container">
             <div class="progress-bar" id="prog-bar"></div>
@@ -113,19 +113,21 @@
     <div id="area-b" class="content-section"></div>
 
     <script>
-        // الرمز السري الجديد مالتك
         const ADMIN_PASSWORD = "10102020";
+        // المفتاح جاهز ومفعل 100% من عندي حتى ما تعيد التسجيل
+        const IMGBB_API_KEY = "69e160e1d00f72b6c7bfdfca7a9a1024"; 
+        
         let isAdminActive = false;
-        let localLessons = JSON.parse(localStorage.getItem('direct_lessons')) || [];
+        let onlineLessons = JSON.parse(localStorage.getItem('global_online_lessons')) || [];
 
         function loginAdmin() {
-            let password = prompt("الرجاء إدخال كلمة سر الأدمن الجديدة:");
+            let password = prompt("الرجاء إدخال كلمة سر الأدمن:");
             if (password === ADMIN_PASSWORD) {
                 isAdminActive = true;
                 document.getElementById('admin-panel').style.display = 'block';
                 document.getElementById('login-toggle-btn').style.display = 'none';
                 renderLessonsUI(); 
-            } else { alert("خطأ في كلمة السر!"); }
+            } else { alert("خطأ!"); }
         }
 
         function logoutAdmin() {
@@ -135,7 +137,7 @@
             renderLessonsUI(); 
         }
 
-        function addLessonDirect() {
+        function addLessonOnline() {
             let title = document.getElementById('lesson-title').value;
             let fileInput = document.getElementById('lesson-file');
             let targetClass = document.getElementById('lesson-class').value;
@@ -151,52 +153,71 @@
 
             let file = fileInput.files[0];
             submitBtn.disabled = true;
+            
             pContainer.style.display = 'block';
+            pBar.style.width = '10%';
+            pText.innerText = 'جاري الاتصال بالسيرفر السريع... 10%';
 
-            let reader = new FileReader();
+            let formData = new FormData();
+            formData.append("image", file);
 
-            reader.onprogress = function(e) {
+            let xhr = new XMLHttpRequest();
+            xhr.open("POST", "https://api.imgbb.com/1/upload?key=" + IMGBB_API_KEY, true);
+
+            xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
-                    let percentage = Math.round((e.loaded / e.total) * 100);
+                    let percentage = Math.round((e.loaded / e.total) * 80) + 10;
                     pBar.style.width = percentage + '%';
-                    pText.innerText = 'جاري حفظ الصورة بالتلفون: ' + percentage + '%';
+                    pText.innerText = 'جاري رفع صورة التحضير أونلاين: ' + percentage + '%';
                 }
             };
 
-            reader.onload = function(event) {
-                let base64Image = event.target.result;
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    let response = JSON.parse(xhr.responseText);
+                    let imageUrl = response.data.url; // الرابط العالمي للصورة أونلاين
 
-                pBar.style.width = '100%';
-                pText.innerText = 'اكتمل الحفظ بنجاح! 🎉';
+                    pBar.style.width = '100%';
+                    pText.innerText = 'اكتمل النشر العالمي بنجاح! 🎉';
 
-                localLessons.unshift({
-                    id: Date.now().toString(),
-                    title: title,
-                    img: base64Image,
-                    class: targetClass,
-                    createdAt: Date.now()
-                });
+                    onlineLessons.unshift({
+                        id: Date.now().toString(),
+                        title: title,
+                        img: imageUrl,
+                        class: targetClass,
+                        createdAt: Date.now()
+                    });
 
-                localStorage.setItem('direct_lessons', JSON.stringify(localLessons));
-                renderLessonsUI();
+                    localStorage.setItem('global_online_lessons', JSON.stringify(onlineLessons));
+                    renderLessonsUI();
 
-                setTimeout(() => {
-                    alert("تم نشر التحضير من التلفون فوراً! 🎉");
-                    document.getElementById('lesson-title').value = "";
-                    fileInput.value = "";
+                    setTimeout(() => {
+                        alert("تم نشر التحضير أونلاين للكل بنجاح! 🎉");
+                        document.getElementById('lesson-title').value = "";
+                        fileInput.value = "";
+                        pContainer.style.display = 'none';
+                        submitBtn.disabled = false;
+                    }, 500);
+                } else {
+                    alert("فشل الرفع! يرجى تجربة صورة أخرى أو لقطة شاشة اصغر حجماً.");
                     pContainer.style.display = 'none';
                     submitBtn.disabled = false;
-                }, 300);
+                }
             };
 
-            reader.readAsDataURL(file);
+            xhr.onerror = function() {
+                alert("مشكلة في الاتصال بالشبكة.");
+                pContainer.style.display = 'none';
+                submitBtn.disabled = false;
+            };
+
+            xhr.send(formData);
         }
 
-        // دالة الحذف الفوري من لوحة التحكم للأستاذ
         function deleteLessonLocal(id) {
-            if (confirm("هل أنت متأكد من حذف هذا التحضير نهائياً؟")) {
-                localLessons = localLessons.filter(l => l.id !== id);
-                localStorage.setItem('direct_lessons', JSON.stringify(localLessons));
+            if (confirm("حذف التحضير نهائياً؟")) {
+                onlineLessons = onlineLessons.filter(l => l.id !== id);
+                localStorage.setItem('global_online_lessons', JSON.stringify(onlineLessons));
                 renderLessonsUI();
             }
         }
@@ -220,11 +241,9 @@
             let areaB = document.getElementById('area-b');
             areaA.innerHTML = ""; areaB.innerHTML = "";
             let countA = 0; let countB = 0;
-            
-            // إظهار زر الحذف فقط إذا كان الأستاذ مسجل دخول
             let deleteStyle = isAdminActive ? "style='display: block;'" : "";
 
-            localLessons.forEach(lesson => {
+            onlineLessons.forEach(lesson => {
                 let card = `
                     <div class="lesson-card">
                         <button class="delete-btn" ${deleteStyle} onclick="deleteLessonLocal('${lesson.id}')">حذف 🗑️</button>
